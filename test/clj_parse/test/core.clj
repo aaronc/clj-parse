@@ -36,3 +36,10 @@
     (is (= (m [['x 1] []]) [[1] ['x]]))
     (is (= (m [[1 2 3] []]) [[] [1 2 3]]))
     (is (= (m [["xyx"] []]) nil))))
+
+
+(comment (deftest test-match-expr
+           (let [test-exp (fn [e] (is (= (match-match-expr e) e)))]  
+             (test-exp [keyword? symbol? '?]) 
+             (test-exp '[|| (keyword? symbol? ?)
+                         (number? symbol? number? (|| (number? ?) (string? ?)))]))))
