@@ -25,13 +25,13 @@
     (is (= (m [[1 2] []]) nil))))
 
 (deftest test-match-seq
-  (let [m (partial (match-seq [ (match* keyword?) (match1 symbol?) (match1? symbol?) (match+ number?)]))]
+  (let [m (partial match (match-seq [ (match* keyword?) (match1 symbol?) (match1? symbol?) (match+ number?)]))]
     (is (= (m [[:a :b :c 'x 1 2 3] []]) [[] [:a :b :c 'x 1 2 3]]))
     (is (= (m [[:a :b :c 'x 'y 1 2 3] []]) [[] [:a :b :c 'x 'y 1 2 3]]))
     (is (= (m [[:a :b :c 'x 'y 'z 1 2 3] []]) nil))))
 
 (deftest test-match-or
-  (let [m (partial (match-or (match+ keyword?) (match1 symbol?) (match+ number?)))]
+  (let [m (partial match (match-or [ (match+ keyword?) (match1 symbol?) (match+ number?)]))]
     (is (= (m [[:a :b :c] []]) [[] [:a :b :c]]))
     (is (= (m [['x 1] []]) [[1] ['x]]))
     (is (= (m [[1 2 3] []]) [[] [1 2 3]]))
