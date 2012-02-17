@@ -1,0 +1,9 @@
+# clj-parse
+
+A library for parsing clojure symbols to be used in macros
+
+## License
+
+Copyright (C) 2012 Aaron Craelius
+
+Distributed under the Eclipse Public License, the same as Clojure.
