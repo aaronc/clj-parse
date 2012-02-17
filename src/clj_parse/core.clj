@@ -3,7 +3,7 @@
 
 (defprotocol IMatcher (match [this ctxt]))
 
-(def ^:dynamic **debug** true)
+(def ^:dynamic **debug** false)
 
 (defn- log [& forms] (when **debug** (println (apply str forms))))
 
@@ -152,7 +152,11 @@
   clojure.lang.IFn (invoke [this coll] (second (match this [coll []]))))
 
 (defn parser
+  "Creates a parser for parsing and transforming Clojure symbols
+  using a grammar defined within Clojure."
   ([forms] (Parser. (matcher forms)))
   ([forms _ transform] (Parser. (matcher forms _ transform))))
+
+(def >>> parser)
 
 (defn || [& forms] (MatchOr. (map #(if (satisfies? IMatcher %) % (matcher %)) forms)))
