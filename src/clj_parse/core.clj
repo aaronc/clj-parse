@@ -3,7 +3,7 @@
 
 (defprotocol IMatcher (match [this ctxt]))
 
-(def ^:dynamic **debug** false)
+(def ^:dynamic **debug** true)
 
 (defn- log [& forms] (when **debug** (println (apply str forms))))
 
@@ -75,9 +75,10 @@
   (let [[coll res] ctxt
           x (first coll)
           more (rest coll)]
-      (when (seq? x)
-        (when-let [[coll2 res2] (match matcher [x []])]
-          (when (empty? coll2) [more (conj res res2)])))))
+      (log "do-match-sub-seq : " matcher " @ " x)
+      (when (sequential? x)
+        (when-let [sub-ctxt (match matcher [x []])]
+          (when (done? sub-ctxt) [more (conj res (second sub-ctxt))])))))
 
 (defrecord MatchSubSeq [matcher]
   IMatcher (match [this ctxt] (do-match-sub-seq matcher ctxt)))
@@ -115,9 +116,19 @@
 
 (defn unary-op [from to] (MatchTransformer. (match1 (eq from)) (constantly to)))
 
+(declare match-expr)
+
+(defrecord SubSeqMatchExpr []
+  IMatcher
+  (match [this ctxt] (do-match-sub-seq match-expr ctxt)))
+
+(def match-sub-seq-expr (MatchTransformer. (SubSeqMatchExpr.) (fn [[matchers]] (MatchSubSeq. (MatchSeq. matchers)))))
+
+(def match-atom (MatchOr. [match-sub-seq-expr (match1 any)]))
+
 (def match-occurrence-expr
   (MatchTransformer.
-   (MatchSeq. [(match1 any)
+   (MatchSeq. [match-atom
                (MatchTransformer.
                 (Match?. (MatchOr. [(unary-op + match+) (unary-op * match*) (unary-op ? match1?)]))
                 (default match1))])
@@ -128,15 +139,7 @@
    (MatchSeq. [match-occurrence-expr (MatchTransformer. (match1 (eq =>)) ignore) (match1 any)])
    (fn [[matcher transform]] (MatchTransformer. matcher transform))))
 
-(declare match-expr)
-
-(defrecord SubSeqMatchExpr []
-  IMatcher
-  (match [this ctxt] (do-match-sub-seq match-expr ctxt)))
-
-(def match-sub-seq-expr (MatchTransformer. (SubSeqMatchExpr.) (fn [[m]] (MatchSubSeq. m))))
-
-(def primary-match-expr (MatchOr. [match-sub-seq-expr match-transform-expr match-occurrence-expr]))
+(def primary-match-expr (MatchOr. [match-transform-expr match-occurrence-expr]))
 
 (def match-expr (Match+. primary-match-expr))
 
