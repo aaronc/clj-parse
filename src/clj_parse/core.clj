@@ -159,4 +159,4 @@
 
 (def >>> parser)
 
-(defn || [& forms] (MatchOr. (map #(if (satisfies? IMatcher %) % (matcher %)) forms)))
+(defn || [& forms] (Parser. (MatchOr. (map #(if (satisfies? IMatcher %) % (matcher %)) forms))))

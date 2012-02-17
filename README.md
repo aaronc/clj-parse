@@ -56,12 +56,20 @@ writen in the syntax of the parser function itself:
 Here is an example parser:
 
 ```clojure
-user> (def my-parser (>>> [keyword? + => #(apply str %) [[number? *]] ? any ?]))
-#'user/my-parser
-user> (my-parser [:a :b :c [1 2 3]])
-[":a:b:c" [1 2 3]]
-user> (my-parser [:a "a"])
-[":a" "a"]
+user> (def p1 (>>> [keyword? + [(|| [keyword? +] [number? * => #(map (partial + 5) %)])] ? number? ? keyword? ?]))
+#'user/p1
+user> (p1 [:a [1 2] 5 :b])
+[:a [6 7] 5 :b]  ;; Parser adds 5 to the numbers in the matched subsequence
+user> (p1 [:a [:c :d] 5 :b])
+[:a [:c :d] 5 :b]
+user> (p1 [:a 5 :b])
+[:a 5 :b]
+user> (p1 [:a 5])
+[:a 5]
+user> (p1 [:a])
+[:a]
+user> (p1 [1 2 3])
+nil ;; Parser returns nil when there is no match
 ```
 
 ## License
