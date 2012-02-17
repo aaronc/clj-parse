@@ -82,6 +82,8 @@
 (defrecord MatchSubSeq [matcher]
   IMatcher (match [this ctxt] (do-match-sub-seq matcher ctxt)))
 
+(defn match-sub-seq [matcher] (MatchSubSeq. matcher))
+
 (defrecord MatchTransformer [matcher transform]
   IMatcher
   (match [this ctxt]
@@ -95,6 +97,8 @@
          (if transformed
            (if (sequential? transformed) (into orig-res transformed) (conj orig-res transformed))
            orig-res)]))))
+
+(defn match-transform [matcher transform] (MatchTransformer. matcher transform))
 
 ;; Convenience mini-language definitions
 (def any (constantly true))
@@ -132,16 +136,20 @@
 
 (def match-sub-seq-expr (MatchTransformer. (SubSeqMatchExpr.) (fn [[m]] (MatchSubSeq. m))))
 
-(def primary-match-expr (MatchOr. [match-transform-expr match-occurrence-expr]))
+(def primary-match-expr (MatchOr. [match-sub-seq-expr match-transform-expr match-occurrence-expr]))
 
 (def match-expr (Match+. primary-match-expr))
 
-(defn matcher [forms] (MatchSeq. (second (match match-expr [forms []]))))
+(defn matcher
+  ([forms] (MatchSeq. (matches-entirely? (match match-expr [forms []]))))
+  ([forms _ transform] (MatchTransformer. (matcher forms) transform)))
 
 (defrecord Parser [matcher]
   IMatcher (match [this ctxt] (match matcher ctxt))
   clojure.lang.IFn (invoke [this coll] (second (match this [coll []]))))
 
-(defn parser [forms] (Parser. (MatchSeq. (matches-entirely? (match match-expr [forms []])))))
+(defn parser
+  ([forms] (Parser. (matcher forms)))
+  ([forms _ transform] (Parser. (matcher forms _ transform))))
 
 (defn || [& forms] (MatchOr. (map #(if (satisfies? IMatcher %) % (matcher %)) forms)))

@@ -46,13 +46,14 @@
 (def MatchOccurenceExpr (matcher
   [any (|| [(eq +) => (constantly match+)]
            [(eq *) => (constantly match*)]
-           [(eq ?) => (constantly match1?)])
-                   => (default match1)]))
+           [(eq ?) => (constantly match1?)]
+           =>) (default match1)] => (fn [expr matchx] (matchx expr))))
 
-(def SubSequenceMatchexpr (matcher [vector? => ]))
+;(def SubSequenceMatchexpr (matcher [vector? => ]))
 
-(def MatchTransformExpr (matcher [MatchOccurenceExpr => any])) 
+(def MatchTransformExpr (matcher [MatchOccurenceExpr (eq =>) any]
+                                 => (fn [expr transform] (match-transform expr transform)))) 
 
 (def PrimaryMatchExpr (|| MatchTransformExpr MatchOccurenceExpr))
   
-(def MatchExpr (matcher [PrimaryMatchExpr +]))
+(def MatchExpr (matcher [PrimaryMatchExpr +] => (fn [matchers] (match-seq matchers))))
