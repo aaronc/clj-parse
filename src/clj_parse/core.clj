@@ -90,19 +90,23 @@
 
 (defn- any [x] true)
 
-(def unary-match-operators #{'+ '* '?})
+(def ?)
+
+(def ||)
+
+(def unary-match-operators #{+ * ?})
 
 (def simple-match-expr (match-transform (match-seq (match1 any) (match1? unary-match-operators))
   (fn [res]
     (let [has-op (= 2 (count res))
           op (when has-op (res 1))
           expr (res 0)]
-      [((get {nil match1 '? match1? '* match* '+ match+} op) expr)]))))
+      [((get {nil match1 ? match1? * match* + match+} op) expr)]))))
 
 (def seq-match-expr (match-transform (matcher+ simple-match-expr)
   (fn [res] [(apply match-seq res)])))
 
-(def or-match-expr (match-transform (match-seq (match-ignore (match1 #(= '|| %))) (matcher+ (match-sub-seq seq-match-expr)))
+(def or-match-expr (match-transform (match-seq (match-ignore (match1 #(= || %))) (matcher+ (match-sub-seq seq-match-expr)))
   (fn [res] [(apply match-or res)])))
 
 (def match-expr (match-or or-match-expr seq-match-expr))
