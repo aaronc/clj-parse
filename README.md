@@ -37,7 +37,7 @@ written in the syntax of the parser itself:
 ### The grammar of the ||> (parser) function:
 
 ```clojure
-  [string? "parser name" [expressions] "grammar expressions" :+ (||> [eq :=> any]) "transform expression" :?]
+  [string? "parser name" [expressions] "grammar expressions" :+ (||> [(eq :=>) any]) "transform expression" :?]
 ```
 A generated parser will match any one of the [expressions] supplied so
 the ||> function essentially serves as the or operator as well.
