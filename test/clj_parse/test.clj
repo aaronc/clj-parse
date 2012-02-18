@@ -1,6 +1,7 @@
-(ns clj-parse.test.core
-  (:use [clj-parse.core])
-  (:use [clojure.test]))
+(ns clj-parse.test
+  (:use [clj-parse.parse])
+  (:use [clojure.test])
+  (:import [clj-parse.parse Match+]))
 
 (def MatchExpr (||> [(||> [any (||> [(eq :+)] [(eq :*)] [(eq :?)]) :?]) :+]))
 

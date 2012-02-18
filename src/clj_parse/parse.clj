@@ -1,4 +1,4 @@
-(ns clj-parse.core
+(ns clj-parse.parse
   (:use [clojure.test]))
 
 (defprotocol IMatcher (match [this ctxt]))
@@ -116,7 +116,6 @@ IMatcher
  (let [[coll res] ctxt
       x (first coll)
       more (rest coll)]
-  (log "do-match-sub-seq : " matcher " @ " x)
   (when (sequential? x)
     (when-let [sub-ctxt (match matcher [x []])]
       (when (done? sub-ctxt) [more (conj res (second sub-ctxt))])))))
@@ -183,21 +182,9 @@ IMatcher
 
 (def match-expr (Match+. "MatchExpr" primary-match-expr))
 
-(defn matcher
-([forms] (MatchSeq. "Matcher" (matches-entirely? (match match-expr [forms []]))))
-([forms _ transform] (MatchTransformer. nil (matcher forms) transform)))
-
 (defrecord Parser [matcher]
 IMatcher (match [this ctxt] (match matcher ctxt))
 clojure.lang.IFn (invoke [this coll] (second (match this [coll []]))))
-
-(defn >>>
-  "Creates a parser for parsing and transforming Clojure symbols
-using a grammar defined within Clojure."
-  ([forms] (Parser. (matcher forms)))
-  ([forms _ transform] (Parser. (matcher forms _ transform))))
-
-(defn || [& forms] (Parser. (MatchOr. "MatchOr" (map #(if (satisfies? IMatcher %) % (matcher %)) forms))))
 
 (def parser-expr
  (Parser.
@@ -262,7 +249,7 @@ using a grammar defined within Clojure."
     (is (= (m [[:a :b :c 'x 'y 'z 1 2 3] []]) nil))))
 
 (deftest test-match-or
-  (let [m (partial match (MatchOr. nil [ (match+ keyword?) (match1 symbol?) (match+ number?)]))]
+  (let [m (partial match (MatchOr. nil [(match+ keyword?) (match1 symbol?) (match+ number?)]))]
     (is (= (m [[:a :b :c] []]) [[] [:a :b :c]]))
     (is (= (m [['x 1] []]) [[1] ['x]]))
     (is (= (m [[1 2 3] []]) [[] [1 2 3]]))

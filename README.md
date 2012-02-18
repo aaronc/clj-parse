@@ -84,7 +84,7 @@ is a silly example:
     `(apply str (flatten [~@actions]))))
 ```
 
-Trying this macro at out at the repl we can get:
+Trying this macro at out at the repl, we can get:
 
 ```clojure
 user> (crazy-macro Say Hello 3 times . Shout hello world 2 times . Whisper goodbye .)
@@ -95,4 +95,4 @@ user> (crazy-macro Say Hello 3 times . Shout hello world 2 times . Whisper goodb
 
 Copyright (C) 2012 Aaron Craelius
 
-Distributed under the Eclipse Public License, same as Clojure.
+Distributed under the Eclipse Public License, the same as Clojure.
