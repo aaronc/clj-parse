@@ -65,6 +65,32 @@ user> (p1 [1 2 3])
 nil ;; Parser returns nil when there is no match
 ```
 
+Parsers can used to create somewhat unusual macros.  Here
+is a silly example:
+
+```clojure
+(def crazy-grammar
+  (||> [(||> [(||> [(eq 'Say) :=> (constantly #(str % ". "))]
+                   [(eq 'Shout) :=> (constantly #(.toUpperCase (str % "! ")))]
+                   [(eq 'Whisper) :=> (constantly #(.toLowerCase (str % "... ")))])
+               #(and (symbol? %) (not (= '. %))) :+ :=> #(apply str (interpose " " %))
+               (||> [number? (eq 'times) :=> ignore]) :? :=> (default 1)
+               (eq '.) :=> ignore] :=> vector) :+]))
+
+(defmacro crazy-macro [& words]
+  (let [sentences (crazy-grammar words)
+        actions (for [[f s n] sentences]
+                  `(for [i# (range ~n)] (~f ~s)))]
+    `(apply str (flatten [~@actions]))))
+```
+
+Trying this macro at out at the repl we can get:
+
+```clojure
+user> (crazy-macro Say Hello 3 times . Shout hello world 2 times . Whisper goodbye .)
+"Hello. Hello. Hello. HELLO WORLD! HELLO WORLD! goodbye... "
+```
+
 ## License
 
 Copyright (C) 2012 Aaron Craelius
