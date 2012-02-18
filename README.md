@@ -3,11 +3,10 @@
 A library for parsing clojure expressions using a grammar defined
 in clojure and optionally transforming expressions at each match.
 
-This software should be considered Alpha quality.  I basically
-wrote it because I was learning clojure and saw people doing
-lots of parsing within macros.  I wanted to see if it would be
-possible to define a language for parsing and transforming
-clojure expressions within clojure.  This is what I came up with.
+This software should be considered Alpha quality.  It was 
+originally written just as an experiment, but hopefully some
+people will find it useful - especially for writing macros
+with variable forms.
 
 ## Usage
 
