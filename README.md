@@ -17,7 +17,7 @@ creating parsers. Existing parsers can be used as match expressions
 within parsers.
 
 Here is a grammar of the language understood by the parser function
-writen in the syntax of the parser itself:
+written in the syntax of the parser itself:
 
 ### The grammar of the parser expression language:
 
