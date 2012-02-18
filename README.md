@@ -33,7 +33,7 @@ writen in the syntax of the parser function itself:
            (||> [(eq :+) "one or many Operator"] ;; (eq x) is equivalent to (partial = x)
                 [(eq :*) "zero or many Operator"]
                 [(eq :?) "optional Operator"]) "Expression Repeat (default one)" :?
-           (||> "Transform Expression" [(eq :=>) "Transform Operator any "Transform Function"]) :?] :+]))
+           (||> "Transform Expression" [(eq :=>) "Transform Operator" any "Transform Function"]) :?] :+]))
 ```
 
 ### The grammar of the parser (alias ||>) function itself:
