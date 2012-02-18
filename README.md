@@ -10,15 +10,14 @@ with variable forms.
 
 ## Usage
 
-There is basically one primary function parser (with an alias ||>)
+There is basically one function parser (with the alias ||>)
 that can be used to define clojure expression parsers within clojure.
 There are also several helper functions and symbols to help with 
-creating parsers. Existing parser can be used as match expressions
+creating parsers. Existing parsers can be used as match expressions
 within parsers.
 
 Here is a grammar of the language understood by the parser function
-writen in the syntax of the parser function itself:
-
+writen in the syntax of the parser itself:
 
 ### The grammar of the parser expression language:
 
@@ -35,13 +34,13 @@ writen in the syntax of the parser function itself:
            (||> "Transform Expression" [(eq :=>) "Transform Operator" any "Transform Function"]) :?] :+]))
 ```
 
-### The grammar of the parser (alias ||>) function itself:
+### The grammar of the ||> (parser) function:
 
 ```clojure
   [string? "parser name" [expressions] "grammar expressions" :+ (||> [eq :=> any]) "transform expression" :?]
 ```
 A generated parser will match any one of the [expressions] supplied so
-the parser function essentially serves as the or operator as well.
+the ||> function essentially serves as the or operator as well.
 
 ## Example
 
