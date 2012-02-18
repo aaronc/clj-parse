@@ -1,6 +1,21 @@
 (ns clj-parse.test.core
   (:use [clj-parse.core])
-  (:use [clojure.test]))
+  (:use [clojure.test])
+  (:import [clj-parse.core Match? Match*]))
+
+(defn match1? [f] (Match?. (match1 f)))
+
+(defn match* [f] (Match*. (match1 f)))
+
+(defn match+ [f] (Match+. (match1 f)))
+
+(defn match-seq [matchers] (MatchSeq. matchers))
+
+(defn match-or [matchers] (MatchOr. matchers))
+
+(defn match-sub-seq [matcher] (MatchSubSeq. matcher))
+
+(defn match-transform [matcher transform] (MatchTransformer. matcher transform))
 
 (deftest test-match1
   (let [m (partial match (match1 keyword?))]
