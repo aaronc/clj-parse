@@ -16,8 +16,10 @@
 ;; Matchers are either composed of other matchers or test functions
 ;; that take a single token and return a boolean result.  If an
 ;; array is passed to a match function #(apply mseq %) is called on
-;; that array.  All match functions taken an optional name argument
-;; as their first argument to be used in debugging.
+;; that array.  If a literal is passed to a match function, that
+;; literal is matched exactly.  Keywords are treated as literals.
+;; All match functions taken an optional name argument as their
+;; first argument to be used in debugging.
 ;;
 ;; m1, m?, m*, m+ take one matcher argument.  mseq, mor, and msubseq take a
 ;; variable number of matcher arguments.
@@ -128,17 +130,30 @@
 
 (defn- assoc-name [name m] (if name (assoc m :name name) m))
 
+(declare m1)
+
+(defn mlit "Creates a matcher which makes the specified literal
+  exactly once.  If name is nil, the matcher name is the literal
+  itself - this is useful for debugging and errors messages."
+  ([name literal] (m1 (if name name (str literal)) #(= literal %)))
+  ([literal] (mlit name literal)))
+
 (defn m1
-  "Matches the given matcher once and fails otherwise.
-  matcher can be an IMatcher instance, a test function,
-  or a sequence of arguments for mseq as described above."
-  ([name matcher]
-     (if (satisfies? IMatcher matcher)
-       (assoc-name name matcher)
-       (if (sequential? matcher)
-         (assoc-name name (apply mseq matcher))
-         (Match1. name matcher))))
-  ([matcher] (m1 nil matcher)))
+  "Matches the given match-expr once and fails otherwise.
+  match-expr can be an IMatcher instance, a test function
+  taking one parameter and returning a true value if the match
+  is successful, a sequence of arguments for mseq as described above,
+  or a literal value. Keywords even though they act as functions
+  are treated as literals."
+  ([name match-expr]
+     (if (satisfies? IMatcher match-expr)
+       (assoc-name name match-expr)
+       (if (sequential? match-expr)
+         (assoc-name name (apply mseq match-expr))
+         (if (and (ifn? match-expr) (not (keyword? match-expr)))
+           (Match1. name match-expr)
+           (mlit name match-expr)))))
+  ([match-expr] (m1 nil match-expr)))
 
 (defparsertype Match? [name matcher] [this ctxt] (or (match matcher ctxt) ctxt))
 

@@ -38,6 +38,11 @@
     (is (= (m [[1 2 3] []]) [[] [1 2 3]]))
     (is (= (m [["xyx"] []]) nil))))
 
+(deftest test-match-literals
+  (let [testm #(is (= ((mseq :a :b 3 number? 4) %) %))]
+    (testm [:a :b 3 17 4])))
+
+
 (deftest test-match-apply-subseq-parse
   (let [p (partial parse (mseq (mor keyword? number?)
                                (mapply first (msubseq (mapply + (m* number?))))))]
