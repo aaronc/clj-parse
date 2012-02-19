@@ -30,7 +30,37 @@ user> (def parser3 (mapply hash-map
 user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 [{:a 6, :c 6000, :b "Hello"}]
 ```
-Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details.
+
+### Alternate Syntax (Experimental)
+
+There is also an alternate syntax which is intended to imitate EBNF notation (currently in the
+clj-parse.pseudoebnf namespace).  Using that syntax, the above examples would be written as:
+
+```clojure
+user> (use 'clj-parse.pseudoebnf)
+nil
+user> (def parser1 (>>> keyword? number? :+ :=> *))
+#'user/parser1
+user> (parser1 [:x 1 2 3 4 5])
+[:x 120]
+user> (def parser2 (>>> (>>> keyword? number? :+ :=> *) :+ :=> hash-map))
+#'user/parser2
+user> (parser2 [:a 1 2 3 :b 4 5 6 :c 10 20 30])
+[{:a 6, :c 6000, :b 120}]
+user> (def parser3 (>>> (>>> keyword? (|| [number? :+ :=> *] [string? :+ :=> str])) :+ :=> hash-map))
+#'user/parser3
+user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
+[{:a 6, :c 6000, :b "Hello"}]
+```
+
+(Note that the generated parsers should be equivalent in both internal structure and usage.)
+
+## Usage
+
+Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details on usage.
+See the source for more interesting examples.  The code for the entire library
+is incredibly small (> 300 lines including tests).  A macro `dbg-parser` is available for debugging
+parsers.
 
 ## License
 
