@@ -7,7 +7,7 @@ for generating macros, functions with complex syntax, or
 even parsing text if the text has been tokenized into clojure
 symbols.
 
-Please see the generated documentation for details.
+Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details.
 
 ## License
 
