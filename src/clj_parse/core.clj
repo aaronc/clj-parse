@@ -27,8 +27,11 @@
 (defn parse [parser forms] (let [[coll res] (match parser [forms []])]
                              (when (empty? coll) res)))
 
-(defn dbg-parse ([parser forms] (dbgparser parser println forms))
-  ([parser debug forms] (binding [**debug** debug log-stack (atom (list))] (parse parser forms))))
+(defmacro dbg-parser [& body]
+  `(binding [**debug** println log-stack (atom (list))] ~@body))
+
+(defmacro dbg-parser* [debug-redirect & body]
+  `(binding [**debug** ~debug-redirect log-stack (atom (list))] ~@body))
 
 (defmacro defparsertype
   [name [mname & args] [this ctxt] & body]

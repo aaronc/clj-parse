@@ -16,3 +16,5 @@
 (defn group [& matches] [matches])
 
 (def mgroup (make-match1-fn (fn [name m] (mapply (str name "*group") group m))))
+
+(def mconstantly (make-match-transform-fn (fn [name t m] (mapply (str name "*constantly") (constantly t) m))))
