@@ -4,7 +4,7 @@
 
 (def ^:dynamic **debug** nil)
 
-(def ^{:private true} log-stack (atom (list)))
+(def ^:private ^:dynamic log-stack (atom (list)))
 
 (defn- log-top [action ctxt]
   (do (when **debug**
@@ -27,8 +27,8 @@
 (defn parse [parser forms] (let [[coll res] (match parser [forms []])]
                              (when (empty? coll) res)))
 
-(defn dbgparser ([parser forms] (dbgparser parser println forms))
-  ([parser debug forms] (binding [**debug** debug] (parse parser forms))))
+(defn dbg-parse ([parser forms] (dbgparser parser println forms))
+  ([parser debug forms] (binding [**debug** debug log-stack (atom (list))] (parse parser forms))))
 
 (defmacro defparsertype
   [name [mname & args] [this ctxt] & body]
@@ -40,7 +40,9 @@
                         (when clj-parse.core/**debug** (clj-parse.core/pop-log ret#))
                         ret#)
                       (catch Throwable e#
-                        (when clj-parse.core/**debug** (clj-parse.core/clear-log-stack))
+                        (when clj-parse.core/**debug**
+                          (clj-parse.core/log-top " received exception " e#)
+                          (clj-parse.core/clear-log-stack))
                         (throw e#))))
            clojure.lang.IFn
            (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))
