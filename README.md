@@ -52,15 +52,15 @@ user> (def parser3 (>>> (>>> keyword? (|| [number? :+ :=> *] [string? :+ :=> str
 user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 [{:a 6, :c 6000, :b "Hello"}]
 ```
-
 (Note that the generated parsers should be equivalent in both internal structure and usage.)
 
 ## Usage
 
 Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details on usage.
-See the source for more interesting examples.  The code for the entire library
+Also see the source and tests for other interesting examples.  The code for the entire library
 is incredibly small (> 300 lines including tests).  A macro `dbg-parser` is available for debugging
-parsers.
+parsers and all matcher functions take an optional string as their first parameter which shows up in
+debugging output.
 
 ## License
 
