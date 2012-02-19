@@ -1,7 +1,7 @@
 (ns clj-parse.test.core
   (:use [clj-parse.core])
+  (:use [clj-parse.helpers])
   (:use [clojure.test]))
-
 
 (deftest test-match1
   (let [m (partial match (m1 keyword?))]
@@ -43,3 +43,22 @@
                                (mapply first (msubseq (mapply + (m* number?))))))]
     (is (= (p [1 [1 2 3]]) [1 6]))))
 
+(def crazy-grammar (m+ (mgroup "Action"
+                        (mseq (mor "Verb"
+                          (mapply (constantly #(str % ". ")) (eq 'Say))
+                          (mapply (constantly #(.toUpperCase (str % "! "))) (eq 'Shout))
+                          (mapply (constantly #(.toLowerCase (str % "... "))) (eq 'Whisper)))
+                          (mapply "Statement" #(apply str (interpose " " %&))
+                                  (m+ "Words" #(and (symbol? %) (not (= '. %)))))
+                         (mdefault "Repetition" 1 (m? [number? (mignore (eq 'times))]))
+                         (mignore (eq '.))))))
+
+(defmacro crazy-macro [& words]
+  (let [sentences (crazy-grammar words)
+        actions (for [[f s n] sentences]
+                  `(for [i# (range ~n)] (~f ~s)))]
+    `(apply str (flatten [~@actions]))))
+
+(deftest test-crazy-macro
+  (is (= (crazy-macro Say Hello 3 times . Shout hello world 2 times . Whisper goodbye .)
+         "Hello. Hello. Hello. HELLO WORLD! HELLO WORLD! goodbye... ")))
