@@ -4,8 +4,17 @@ A simple framework for creating parsers that parse
 (and possibly transform) sequences of clojure symbols
 into sequences of clojure symbols.  This could be useful
 for generating macros, functions with complex syntax, or
-even parsing text if the text has been tokenized into clojure
-symbols.
+even parsing test.
+
+The primarly design goal is to make it easy to generate correct
+parsers, but performance is not a primary consideration.
+Scenarios that do not depend on speed, such as generating macros,
+are good use cases.  The entire framework is expressed in about
+200 lines of code so that it can be easily embedded in projects
+that do not want an extra dependency.
+
+This library should be considered **alpha** quality as it has
+not been used in production.
 
 ## Examples
 
@@ -57,8 +66,7 @@ user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 ## Usage
 
 Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details on usage.
-Also see the source and tests for other interesting examples.  The code for the entire library
-is incredibly small (> 300 lines including tests).  A macro `dbg-parser` is available for debugging
+Also see the source and tests for other interesting examples. A macro `dbg-parser` is available for debugging
 parsers and all matcher functions take an optional string as their first parameter which shows up in
 debugging output.
 
