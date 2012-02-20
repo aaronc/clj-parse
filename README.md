@@ -4,15 +4,16 @@ A simple framework for creating parsers that parse
 (and possibly transform) sequences of clojure symbols
 into sequences of clojure symbols.  This could be useful
 for generating macros, functions with complex syntax, or
-even parsing test.
+even parsing text.
 
 The primarly design goal is to make it easy to generate correct
-parsers, but performance is not a primary consideration.
-Scenarios that do not depend on speed, such as generating macros,
-are good use cases.  The entire framework is expressed in a little
-more than 300 lines of code (excluding comments and docstrings)
-so that it can be easily embedded in projects that do not want an extra dependency.
-
+parsers with an intuitive syntax.  As a result the framework has
+not been optimized for performance. Scenarios that do not depend on speed,
+such as generating macros, are good use cases.  The framework has been
+designed to be small, but robust being expressed in only a little more
+than 300 lines of code (excluding documentation and comments), but
+still providing useful error messages and debugging functionality.
+ 
 This library should be considered **alpha** quality as it has
 not been used in production.
 
