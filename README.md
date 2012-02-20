@@ -48,15 +48,15 @@ clj-parse.pseudoebnf namespace).  Using that syntax, the above examples would be
 ```clojure
 user> (use 'clj-parse.pseudoebnf)
 nil
-user> (def parser1 (>>> keyword? number? :+ :=> *))
+user> (def parser1 (grammar keyword? number? :+ :=> *))
 #'user/parser1
 user> (parser1 [:x 1 2 3 4 5])
 [:x 120]
-user> (def parser2 (>>> (>>> keyword? number? :+ :=> *) :+ :=> hash-map))
+user> (def parser2 (grammar [keyword? number? :+ :=> *] :+ :=> hash-map))
 #'user/parser2
 user> (parser2 [:a 1 2 3 :b 4 5 6 :c 10 20 30])
 [{:a 6, :c 6000, :b 120}]
-user> (def parser3 (>>> (>>> keyword? (|| [number? :+ :=> *] [string? :+ :=> str])) :+ :=> hash-map))
+user> (def parser3 (grammar [keyword? (|| [number? :+ :=> *] [string? :+ :=> str])] :+ :=> hash-map))
 #'user/parser3
 user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 [{:a 6, :c 6000, :b "Hello"}]
