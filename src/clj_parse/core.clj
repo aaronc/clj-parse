@@ -29,37 +29,44 @@
 ;; succeeds.
 (ns clj-parse.core)
 
-
 ;; ## Definitions for debug logging and error handling
 
 (def ^{:dynamic true :doc "Bound to the function used for debug logging or nil to disable logging"} **debug**  nil)
 
-(def ^:private ^:dynamic log-stack (atom (list)))
+(def ^:private ^:dynamic parser-stack nil)
+
+(def ^:private ^:dynamic error-info nil)
+
+(def ^:private ^:dynamic error-index nil)
+
+(def ^:private ^:dynamic cur-tokens nil)
 
 (defn- log-top [action ctxt]
   (do (when **debug**
-        (let [top (peek @log-stack)
-              depth (count @log-stack)
+        (let [top (peek @parser-stack)
+              depth (count @parser-stack)
               pre (apply str (repeat (dec depth) "-"))
-              ctxt (if (nil? ctxt) "nil" ctxt)]
-          (when (> depth 0) (**debug** (str pre top action ctxt)))))
+              ctxt (if (nil? ctxt) "nil" ctxt)
+              name (when top (str "<" (.getSimpleName (class top)) " "
+                                (or (:name top) "Unknown") ">"))]
+          (if (> depth 0)
+            (**debug** (str pre name action ctxt))
+            (**debug** (str "Start of parse stack: " name)))))
       ctxt))
         
-(defn- push-log [this name ctxt]
+(defn- push-log [this ctxt]
   (do (log-top " passed " ctxt)
-      (let [msg (str "<" (.getSimpleName (class this)) " "
-                     (or name "Unknown") ">")]
-        (swap! log-stack conj msg))))
+      (swap! parser-stack conj this)))
 
-(defn- pop-log [ret] (do (log-top " returned " ret) (swap! log-stack pop)))
+(defn- pop-log [ret] (do (log-top " returned " ret) (swap! parser-stack pop)))
 
-(defn- clear-log-stack [] (swap! log-stack (fn [_] (list))))
+(defn- clear-log-stack [] (swap! parser-stack (fn [_] (list))))
 
 (defmacro dbg-parser
   "Convenience macro for debugging parsers.  Wrap the expressions
   you want to debug in the macro.  Ex: `(dbg-parser (my-parser tokens))`"
   [& body]
-  `(binding [**debug** println log-stack (atom (list))] ~@body))
+  `(binding [**debug** println parser-stack (atom (list))] ~@body))
 
 (defmacro dbg-parser* 
   "Same as `dbg-parser` excepts requires that you specify a `debug-redirect` function
@@ -89,6 +96,8 @@
   effects."))
 
 ;; These functions are used to interact with the parsing context
+(defn- ctxtcreate [tokens] [tokens []])
+
 (defn- cpeek [ctxt] (ffirst ctxt))
 
 (defn- cpop [[tokens res]] [(rest tokens) res])
@@ -97,11 +106,22 @@
 
 (defn- csetresult [[tokens res1] res2] [tokens res2])
 
+(defn- ctokens [ctxt] (first ctxt))
+
 (defn- cresult [ctxt] (second ctxt))
 
 (defn- cdone? [ctxt] (empty? (first ctxt)))
 
-(defn- track-match-fail! [ctxt] nil)
+(defn- track-match-fail! [ctxt]
+  (when error-index
+    (let [last-idx @error-index
+          cur-idx (count (first ctxt))]
+       (cond (< cur-idx last-idx)
+                (do (swap! error-info (constantly [[ctxt @parser-stack]]))
+                    (swap! error-index (constantly cur-idx)))
+             (= cur-idx last-idx)
+                (swap! error-info conj [ctxt @parser-stack]))
+                nil)))
 
 (defmacro wrap-track-fail [ctxt & body]
   `(let [res# (do ~@body)] (if res# res# (track-match-fail! ~ctxt))))
@@ -109,8 +129,35 @@
 (defn parse "Given an IMatcher matcher and a sequence of tokens,
   parse the tokens and return the result sequence or nil if the
   matcher did not match all of the tokens."
-  [matcher tokens] (let [ctxt (match matcher [tokens []])] 
+  [matcher tokens] (let [ctxt (match matcher (ctxtcreate tokens))] 
                              (when (cdone? ctxt) (cresult ctxt))))
+
+(defn parse-detailed "Run parse as above but when the parse fails
+  instead of returning nil, return a map with information detailing
+  the error cause."
+  [matcher tokens]
+  (binding
+      [cur-tokens tokens
+       parser-stack (atom (list))
+       error-info (atom [])
+       error-index (atom (count tokens))]
+    (let [res-ctxt (match matcher (ctxtcreate tokens))]
+      (cond
+       (nil? res-ctxt) ; Parsing failed completely
+          (let [ntokens (count tokens)
+                idx (- ntokens @error-index)
+                error-details @error-info
+                eof (= idx ntokens)
+                token (when (not eof) (nth tokens idx))]
+          {:error-details error-details
+           :index idx
+           :eof eof
+           :actual-token token
+           :expected-tokens (map #(:name (peek (second %))) error-details)})
+       (not (cdone? res-ctxt)) ; Parsing was successful, but not all of
+          {:unexpected-tokens (ctokens res-ctxt)} ; the tokens were parsed
+       :success
+          (cresult res-ctxt)))))
 
 (defmacro defparsertype
   "Used for defining IMatcher instances, ensuring that their match
@@ -122,12 +169,12 @@
       `(defrecord ~name [~mname ~@args]
          IMatcher
          (match [~this ~ctxt] 
-           (try (when clj-parse.core/**debug** (clj-parse.core/push-log ~this ~mname ~ctxt))
+           (try (when clj-parse.core/parser-stack (clj-parse.core/push-log ~this ~ctxt))
                       (let [ret# (do ~@body)]
-                        (when clj-parse.core/**debug** (clj-parse.core/pop-log ret#))
+                        (when clj-parse.core/parser-stack (clj-parse.core/pop-log ret#))
                         ret#)
                       (catch Throwable e#
-                        (when clj-parse.core/**debug**
+                        (when clj-parse.core/parser-stack
                           (clj-parse.core/log-top " received exception " e#)
                           (clj-parse.core/clear-log-stack))
                         (throw e#))))
