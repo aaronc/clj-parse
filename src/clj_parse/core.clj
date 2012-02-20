@@ -35,11 +35,13 @@
 
 (def ^:private ^:dynamic parser-stack nil)
 
+(def ^:private ^:dynamic cur-tokens nil)
+
 (def ^:private ^:dynamic error-info nil)
 
 (def ^:private ^:dynamic error-index nil)
 
-(def ^:private ^:dynamic cur-tokens nil)
+(def ^:private ^:dynamic nested-exception nil)
 
 (defn- log-top [action ctxt]
   (do (when **debug**
@@ -49,9 +51,8 @@
               ctxt (if (nil? ctxt) "nil" ctxt)
               name (when top (str "<" (.getSimpleName (class top)) " "
                                 (or (:name top) "Unknown") ">"))]
-          (if (> depth 0)
-            (**debug** (str pre name action ctxt))
-            (**debug** (str "Start of parse stack: " name)))))
+          (when (> depth 0)
+            (**debug** (str pre name action ctxt)))))
       ctxt))
         
 (defn- push-log [this ctxt]
@@ -59,8 +60,6 @@
       (swap! parser-stack conj this)))
 
 (defn- pop-log [ret] (do (log-top " returned " ret) (swap! parser-stack pop)))
-
-(defn- clear-log-stack [] (swap! parser-stack (fn [_] (list))))
 
 (defmacro dbg-parser
   "Convenience macro for debugging parsers.  Wrap the expressions
@@ -114,11 +113,13 @@
 
 (defn- track-match-fail! [ctxt]
   (when error-index
+    (when **debug** (**debug** "track-match-fail! " ctxt @parser-stack))
     (let [last-idx @error-index
           cur-idx (count (first ctxt))]
        (cond (< cur-idx last-idx)
                 (do (swap! error-info (constantly [[ctxt @parser-stack]]))
-                    (swap! error-index (constantly cur-idx)))
+                    (swap! error-index (constantly cur-idx))
+                    (swap! nested-exception (constantly nil)))
              (= cur-idx last-idx)
                 (swap! error-info conj [ctxt @parser-stack]))
                 nil)))
@@ -130,7 +131,7 @@
   `(if (and cur-tokens (not (identical? cur-tokens ~tokens)))
      (binding [cur-tokens ~tokens error-info nil error-index nil]
        (do ~@body))
-     (do `@body)))
+     (do ~@body)))
 
 (defn parse "Given an IMatcher matcher and a sequence of tokens,
   parse the tokens and return the result sequence or nil if the
@@ -139,15 +140,18 @@
                      (let [ctxt (match matcher (ctxtcreate tokens))] 
                        (when (cdone? ctxt) (cresult ctxt)))))
 
+(defn- infer-token-name [pstack] (let [top (peek pstack)] (or (:name top) (pr-str top))))
+
 (defn parse-detailed "Run parse as above but when the parse fails
   instead of returning nil, return a map with information detailing
   the error cause."
   [matcher tokens]
   (binding
       [cur-tokens tokens
-       parser-stack (atom (list))
+       parser-stack (or parser-stack (atom (list)))
        error-info (atom [])
-       error-index (atom (count tokens))]
+       error-index (atom (count tokens))
+       nested-exception (atom nil)]
     (let [res-ctxt (match matcher (ctxtcreate tokens))]
       (cond
        (nil? res-ctxt) ; Parsing failed completely
@@ -160,7 +164,8 @@
            :index idx
            :eof eof
            :actual-token token
-           :expected-tokens (map #(:name (peek (second %))) error-details)})
+           :expected-tokens (map #(infer-token-name (second %)) error-details)
+           :nested-exception @nested-exception})
        (not (cdone? res-ctxt)) ; Parsing was successful, but not all of
           {:unexpected-tokens (ctokens res-ctxt)} ; the tokens were parsed
        :success
@@ -175,7 +180,9 @@
            (str "Got " (:actual-token err-map) " at index "
                 (:index err-map) ". "))
        "Expected" (when (> 1 (count expected) " one of"))
-       ": " (apply str (interpose ", " expected))))))
+       ": " (apply str (interpose ", " expected))
+       (when-let [ex (:nested-exception err-map)]
+         (str "\nPossibly caused by caught exception: " ex))))))
 
 (gen-class :name clj-parse.ParserException :extends java.lang.Exception)
 
@@ -187,7 +194,8 @@
          (if (map? res)
            (throw (clj-parse.ParserException.
                    (str (or (:name matcher) "Parser") " error. "
-                        (create-parser-error-msg res)) nil))
+                        (create-parser-error-msg res))
+                        (:nested-exception res)))
            res))
        (catch clj-parse.ParserException ex (throw ex))
        (catch Throwable ex
@@ -211,8 +219,11 @@
                       (catch Throwable e#
                         (when clj-parse.core/parser-stack
                           (clj-parse.core/log-top " received exception " e#)
-                          (clj-parse.core/clear-log-stack))
-                        (throw e#))))
+                          (clj-parse.core/track-match-fail! ~ctxt))
+                        (if clj-parse.core/nested-exception
+                          (do (swap! clj-parse.core/nested-exception (constantly e#))
+                            nil)
+                          (throw e#)))))
            clojure.lang.IFn
            (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))
 
@@ -356,9 +367,3 @@ first successful matcher." :arglists '([name & matchers] [& matchers])}
   Otherwise, its result is conj'ed onto the result sequence."
   ([name sub-parser] (MatchSub. name sub-parser))
   ([sub-parser] (msub nil sub-parser)))
-
-(comment (def ^{:doc "Creates a matcher which if it encounters a sequence as the first token,
-  will try to match the sequence of matchers against the tokens in the sub-sequence, failing
-  if the matchers do not parse the subsequence tokens completely, and
-  appending the array of results to the result sequence as an array." :arglists '([name & matchers] [& matchers])}
-    msubseq (make-match1-fn (fn [name f*] (MatchSubSeq. name (MatchSeq. name f*))))))
