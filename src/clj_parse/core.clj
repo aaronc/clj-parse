@@ -27,7 +27,8 @@
 ;; mapply takes one matcher argument and a transform function which
 ;; can transform the the output of its child matcher if that matcher
 ;; succeeds.
-(ns clj-parse.core)
+(ns clj-parse.core
+  (:gen-class))
 
 ;; ## Definitions for debug logging and error handling
 
