@@ -126,11 +126,18 @@
 (defmacro wrap-track-fail [ctxt & body]
   `(let [res# (do ~@body)] (if res# res# (track-match-fail! ~ctxt))))
 
+(defmacro protect-shared-globals [tokens & body]
+  `(if (and cur-tokens (not (identical? cur-tokens ~tokens)))
+     (binding [cur-tokens ~tokens error-info nil error-index nil]
+       (do ~@body))
+     (do `@body)))
+
 (defn parse "Given an IMatcher matcher and a sequence of tokens,
   parse the tokens and return the result sequence or nil if the
   matcher did not match all of the tokens."
-  [matcher tokens] (let [ctxt (match matcher (ctxtcreate tokens))] 
-                             (when (cdone? ctxt) (cresult ctxt))))
+  [matcher tokens] (protect-shared-globals tokens
+                     (let [ctxt (match matcher (ctxtcreate tokens))] 
+                       (when (cdone? ctxt) (cresult ctxt)))))
 
 (defn parse-detailed "Run parse as above but when the parse fails
   instead of returning nil, return a map with information detailing
@@ -158,6 +165,34 @@
           {:unexpected-tokens (ctokens res-ctxt)} ; the tokens were parsed
        :success
           (cresult res-ctxt)))))
+
+(defn create-parser-error-msg [err-map]
+  (if-let [unexpected (:unexpected-tokens err-map)]
+    (str "Unexpected tokens: " (into [] unexpected))
+    (let [expected (:expected-tokens err-map)]
+      (str
+       (if (:eof err-map) "Unexpected end of input. "
+           (str "Got " (:actual-token err-map) " at index "
+                (:index err-map) ". "))
+       "Expected" (when (> 1 (count expected) " one of"))
+       ": " (apply str (interpose ", " expected))))))
+
+(gen-class :name clj-parse.ParserException :extends java.lang.Exception)
+
+(defn parse-ex
+  "Same as parse function above, but throws an exception
+  when the parser fails."
+  [matcher tokens]
+  (try (let [res (parse-detailed matcher tokens)]
+         (if (map? res)
+           (throw (clj-parse.ParserException.
+                   (str (or (:name matcher) "Parser") " error. "
+                        (create-parser-error-msg res)) nil))
+           res))
+       (catch clj-parse.ParserException ex (throw ex))
+       (catch Throwable ex
+         (throw (clj-parse.ParserException. (str "Caught exception in "
+           (or (:name matcher) "parser") ": " (.toString ex)) ex)))))
 
 (defmacro defparsertype
   "Used for defining IMatcher instances, ensuring that their match
