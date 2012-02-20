@@ -218,12 +218,12 @@
                         ret#)
                       (catch Throwable e#
                         (when clj-parse.core/parser-stack
-                          (clj-parse.core/log-top " received exception " e#)
+                          (clj-parse.core/log-top " received exception:" "")
+                          (when clj-parse.core/**debug** (clj-parse.core/**debug** e#))
                           (clj-parse.core/track-match-fail! ~ctxt))
-                        (if clj-parse.core/nested-exception
-                          (do (swap! clj-parse.core/nested-exception (constantly e#))
-                            nil)
-                          (throw e#)))))
+                        (when clj-parse.core/nested-exception
+                          (swap! clj-parse.core/nested-exception (constantly e#)))
+                        nil)))
            clojure.lang.IFn
            (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))
 
