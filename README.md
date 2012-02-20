@@ -66,7 +66,7 @@ user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 ## Usage
 
 Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details on usage.
-Also see the source and tests for other interesting examples. A macro `dbg-parser` is available for debugging
+You can see some interesting examples in the [tests](http://aaronc.github.com/clj-parse/grammar-examples.clj). A macro `dbg-parser` is available for debugging
 parsers and all matcher functions take an optional string as their first parameter which shows up in
 debugging output.
 
