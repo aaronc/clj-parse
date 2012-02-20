@@ -2527,283 +2527,30 @@ $(document).ready(function() {
 
 })
 </script><title>clj-parse -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">clj-parse</h1><h2 class="project-version">0.3.0</h2><br /><p>A library for parsing Clojure symbols in Clojure.</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.3.0</td></tr></table></div><div class="dependencies"><h3>dev dependencies</h3><table><tr><td class="dep-name">lein-autodoc</td><td class="dotted"><hr /></td><td class="dep-version">0.9.0</td></tr><tr><td class="dep-name">lein-marginalia</td><td class="dotted"><hr /></td><td class="dep-version">0.7.0-SNAPSHOT</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#clj-parse.core">clj-parse.core</a></li><li><a href="#clj-parse.helpers">clj-parse.helpers</a></li><li><a href="#clj-parse.pseudoebnf">clj-parse.pseudoebnf</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-parse.core" name="clj-parse.core"><h1 class="project-name">clj-parse.core</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><h2>Overview</h2>
-
-<p>A simple framework for creating parsers that parse
-(and possibly transform) sequences of clojure symbols
-into sequences of clojure symbols.  This could be useful
-for generating macros, functions with complex syntax, or
-even parsing text if the text has been tokenized into clojure
-symbols.</p>
-
-<h2>Usage</h2>
-
-<p>Parsers are created using 8 core functions called matchers
-prefixed with m: m1, m?, m*, m+, mseq, mor, mapply, and msubseq.
-The matcher names should be descriptive enough to give some idea.</p>
-
-<p>Matchers are either composed of other matchers or test functions
-that take a single token and return a boolean result.  If an
-array is passed to a match function #(apply mseq %) is called on
-that array.  If a literal is passed to a match function, that
-literal is matched exactly.  Keywords and symbols are treated as
-literals.  All match functions taken an optional name argument as
-their first argument to be used in debugging.</p>
-
-<p>m1, m?, m*, m+ take one matcher argument.  mseq, mor, and msubseq take a
-variable number of matcher arguments.</p>
-
-<p>mapply takes one matcher argument and a transform function which
-can transform the the output of its child matcher if that matcher
-succeeds.</p>
-</td><td class="codes" /><pre class="brush: clojure">(ns clj-parse.core)</pre></tr><tr><td class="docs"><h2>Definitions for debug logging and error handling</h2>
-</td><td class="codes" /></tr><tr><td class="docs"><p>Bound to the function used for debug logging or nil to disable logging</p>
-</td><td class="codes" /><pre class="brush: clojure">(def ^{:dynamic true :doc } **debug**  nil)</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def ^:private ^:dynamic log-stack (atom (list)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- log-top [action ctxt]
-  (do (when **debug**
-        (let [top (peek @log-stack)
-              depth (count @log-stack)
-              pre (apply str (repeat (dec depth) &quot;-&quot;))
-              ctxt (if (nil? ctxt) &quot;nil&quot; ctxt)]
-          (when (&gt; depth 0) (**debug** (str pre top action ctxt)))))
-      ctxt))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- push-log [this name ctxt]
-  (do (log-top &quot; passed &quot; ctxt)
-      (let [msg (str &quot;&lt;&quot; (.getSimpleName (class this)) &quot; &quot;
-                     (or name &quot;Unknown&quot;) &quot;&gt;&quot;)]
-        (swap! log-stack conj msg))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- pop-log [ret] (do (log-top &quot; returned &quot; ret) (swap! log-stack pop)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- clear-log-stack [] (swap! log-stack (fn [_] (list))))</pre></tr><tr><td class="docs"><p>Convenience macro for debugging parsers.  Wrap the expressions
-  you want to debug in the macro.  Ex: <code>(dbg-parser (my-parser tokens))</code></p>
-</td><td class="codes" /><pre class="brush: clojure">(defmacro dbg-parser
-  [&amp; body]
-  `(binding [**debug** println log-stack (atom (list))] ~@body))</pre></tr><tr><td class="docs"><p>Same as <code>dbg-parser</code> excepts requires that you specify a <code>debug-redirect</code> function
-  to redirect debugging output to as the first parameter.  <code>dbg-parser</code>
-  defaults to using <code>println</code>.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defmacro dbg-parser* 
-  [debug-redirect &amp; body]
-  `(binding [**debug** ~debug-redirect log-stack (atom (list))] ~@body))</pre></tr><tr><td class="docs"><h2>Definitions of the core parser functions and data structures</h2>
-</td><td class="codes" /></tr><tr><td class="docs"><p>The core interface of the parsing framework.  All functions which do
-  parsing implement IMatcher.  Any function implementing IMatcher
-  can be used as an expression in a parser and any parser generated
-  by the matcher functions implements IMatcher.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defprotocol IMatcher
-  (match [this ctxt]
-    &quot;The function called to perform matches. The ctxt parameter is a
-  vector of two sequences [tokens output] - the sequence of tokens to
-  be parsed and the resulting sequence of output tokens.  Any implementation
-  of the match function should return either a ctxt vector if the match was
-  successful or nil if the match failed.  Tokens that have been parsed
-  should be removed from the token list and any result tokens should be
-  added to the output list (these may be the same tokens that were
-  parsed or transformations of them).  The same ctxt vector can even
-  be returned to indicate that a match was successful but had no side
-  effects.&quot;))</pre></tr><tr><td class="docs"><p>These functions are used to interact with the parsing context</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn- cpeek [ctxt] (ffirst ctxt))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- cpop [[tokens res]] [(rest tokens) res])</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- cpop-conj [[tokens res] x] [(rest tokens) (conj res x)])</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- csetresult [[tokens res1] res2] [tokens res2])</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- cresult [ctxt] (second ctxt))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- cdone? [ctxt] (empty? (first ctxt)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- track-match-fail! [ctxt] nil)</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defmacro wrap-track-fail [ctxt &amp; body]
-  `(let [res# (do ~@body)] (if res# res# (track-match-fail! ~ctxt))))</pre></tr><tr><td class="docs"><p>Given an IMatcher matcher and a sequence of tokens,
-  parse the tokens and return the result sequence or nil if the
-  matcher did not match all of the tokens.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn parse 
-  [matcher tokens] (let [ctxt (match matcher [tokens []])] 
-                             (when (cdone? ctxt) (cresult ctxt))))</pre></tr><tr><td class="docs"><p>Used for defining IMatcher instances, ensuring that their match
-  function is wrapped within logging code for debugging purposes and
-  exception handlers.  Also adds an implementation of clojure.lang.IFn
-  to IMatcher's that calls the <code>parse</code> function (so that <code>(parse myParser tokens)</code>
-  and `(myParser tokens) are equivalent.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defmacro defparsertype
-  [name [mname &amp; args] [this ctxt] &amp; body]
-      `(defrecord ~name [~mname ~@args]
-         IMatcher
-         (match [~this ~ctxt] 
-           (try (when clj-parse.core/**debug** (clj-parse.core/push-log ~this ~mname ~ctxt))
-                      (let [ret# (do ~@body)]
-                        (when clj-parse.core/**debug** (clj-parse.core/pop-log ret#))
-                        ret#)
-                      (catch Throwable e#
-                        (when clj-parse.core/**debug**
-                          (clj-parse.core/log-top &quot; received exception &quot; e#)
-                          (clj-parse.core/clear-log-stack))
-                        (throw e#))))
-           clojure.lang.IFn
-           (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))</pre></tr><tr><td class="docs"><p>Calls test-fn on the first token in the token sequence.
-If test-fn is not nil or false, takes the token from
-the token sequence and places it in the output sequence.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype Match1 [name test-fn] [this ctxt]
-  (wrap-track-fail ctxt (when (not (cdone? ctxt))
-          (let [x (cpeek ctxt)]
-            (when (test-fn x) (cpop-conj ctxt x))))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(declare mseq)</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- assoc-name [name m] (if name (assoc m :name name) m))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(declare m1)</pre></tr><tr><td class="docs"><p>Creates a matcher which makes the specified literal
-  exactly once.  If name is nil, the matcher name is the literal
-  itself - this is useful for debugging and errors messages.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn mlit 
-  ([name literal] (m1 (if name name (str literal)) #(= literal %)))
-  ([literal] (mlit nil literal)))</pre></tr><tr><td class="docs"><p>Matches the given match-expr once and fails otherwise.
-  match-expr can be an IMatcher instance, a test function
-  taking one parameter and returning a true value if the match
-  is successful, a sequence of arguments for mseq as described above,
-  or a literal value. Keywords and symbols even though they
-  implement IFn are treated as literals.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn m1
-  ([name match-expr]
-     (if (satisfies? IMatcher match-expr)
-       (assoc-name name match-expr)
-       (if (sequential? match-expr)
-         (assoc-name name (apply mseq match-expr))
-         (if (and (ifn? match-expr)
-                  (not (keyword? match-expr))
-                  (not (symbol? match-expr)))
-           (Match1. name match-expr)
-           (mlit name match-expr)))))
-  ([match-expr] (m1 nil match-expr)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype Match? [name matcher] [this ctxt] (or (match matcher ctxt) ctxt))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- do-match* [matcher ctxt]
-    (loop [last-ctxt ctxt]
-    (if (cdone? last-ctxt)
-      last-ctxt
-      (if-let [cur-ctxt (match matcher last-ctxt)]
-                            (if (= cur-ctxt last-ctxt) last-ctxt (recur cur-ctxt))
-                            last-ctxt))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype Match* [name matcher] [this ctxt] (do-match* matcher ctxt))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype Match+ [name matcher] [this ctxt]
-  (let [new-ctxt (do-match* matcher ctxt)]
-      (if (= ctxt new-ctxt) nil new-ctxt)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn make-match1-fn [func]
-  (fn ([name f] (func name (m1 name f)))
-     ([f] (func nil (m1 f)))))</pre></tr><tr><td class="docs"><p>Matches the given matcher once or succeeds with no side effects.</p>
-
-<p>Matches the given matcher any number of times or succeeds with no side effects.</p>
-
-<p>Matches the given matcher one or more times or fails.</p>
-</td><td class="codes" /><pre class="brush: clojure">(def ^{:doc  :arglists '([name matcher] [matcher])}
-  m? (make-match1-fn (fn [name f] (Match?. name f))))
-(def ^{:doc  :arglists '([name matcher] [matcher])}
-  m* (make-match1-fn (fn [name f] (Match*. name f))))
-(def ^{:doc  :arglists '([name matcher] [matcher])}
-  m+ (make-match1-fn (fn [name f] (Match+. name f))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype MatchSeq [name matchers] [this ctxt]
-  (loop [m (first matchers)
-         more (rest matchers)
-         last-ctxt ctxt]
-            (if m (if-let [new-ctxt (match m last-ctxt)] (recur (first more) (rest more) new-ctxt) nil)
-                last-ctxt)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype MatchOr [name matchers] [this ctxt]
-  (loop [m (first matchers) more (rest matchers)]
-    (when m
-      (if-let [new-ctxt (match m ctxt)]
-        new-ctxt
-        (recur (first more) (rest more))))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn make-match*-fn [func]
-  (fn [&amp; forms]
-    (let [x (first forms)
-          name (when (string? x) x)
-          f* (map m1 (if name (rest forms) forms))]
-      (func name f*))))</pre></tr><tr><td class="docs"><p>Creates a matcher which matchs the given matchers in order.</p>
-
-<p>Creates a matcher which tries to match any one of the given matchers, returning the transformation of the
-first successful matcher.</p>
-</td><td class="codes" /><pre class="brush: clojure">(def ^{:doc  :arglists '([name &amp; matchers] [&amp; matchers])}
-  mseq (make-match*-fn (fn [name f*] (MatchSeq. name f*))))
-(def ^{:doc  :arglists '([name &amp; matchers] [&amp; matchers])}
-  mor (make-match*-fn (fn [name f*] (MatchOr. name f*))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype MatchTransform [name transform matcher] [this ctxt]
-  (when-let [new-ctxt (match matcher ctxt)]
-    (let [orig-res (cresult ctxt)
-          start (count orig-res)
-          new-res (cresult new-ctxt)
-          end (count new-res)
-          to-transform (log-top &quot; transforming &quot;(subvec new-res start end))
-          transformed (log-top &quot; transformed to &quot; (apply transform to-transform))]
-          (csetresult new-ctxt
-                      (if (nil? transformed)
-                        orig-res
-                        (if (sequential? transformed)
-                          (into orig-res transformed) (conj orig-res transformed)))))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn- cput [[tokens res] x] [tokens
- (if (sequential? x) (into res x) (conj res x))])</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn make-match-transform-fn [func]
-  (fn ([name transform m] (func name transform (m1 m)))
-     ([transform m] (func nil transform (m1 m)))))</pre></tr><tr><td class="docs"><p>Calls #(apply transform %) on the sequence of results appended to the result array by matcher
-  if matcher succeeds and fails otherwise.</p>
-
-<p>  The transform function should take the number of arguments
-  it expects to receive from the matcher (or a variable number if it doesn't know.  If the transform
-  function returns nil or an empty sequence, the match still succeeds, but nothing is appended to the
-  result array (i.e. the result is ignored).  If the transform function returns a sequence,
-  the items from the sequence are appended into the result array.  If the transform function returns
-  any other value, that value is conj'ed to the result array.  (To append nil to the result array,
-  transform should return [nil].</p>
-</td><td class="codes" /><pre class="brush: clojure">(def
-  mapply (make-match-transform-fn (fn [name transform m] (MatchTransform. name transform m))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defparsertype MatchSub [name sub-parser] [this ctxt]
-  (wrap-track-fail ctxt (when (not (cdone? ctxt))
-                         (let [res (sub-parser (cpeek ctxt))]
-                           (log-top &quot; sub parser returned &quot; res)
-                           (when (not (nil? res)) (cpop-conj ctxt res))))))</pre></tr><tr><td class="docs"><p>Allows a sub-parser to parse a single expression and
-  substitute it into the result stream.  sub-parser should be a function
-  which takes one argument.  If it returns nil, the match fails.
-  Otherwise, its result is conj'ed onto the result sequence.</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn msub 
-  ([name sub-parser] (MatchSub. name sub-parser))
-  ([sub-parser] (msub nil sub-parser)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(comment (def ^{:doc &quot;Creates a matcher which if it encounters a sequence as the first token,
-  will try to match the sequence of matchers against the tokens in the sub-sequence, failing
-  if the matchers do not parse the subsequence tokens completely, and
-  appending the array of results to the result sequence as an array.&quot; :arglists '([name &amp; matchers] [&amp; matchers])}
-    msubseq (make-match1-fn (fn [name f*] (MatchSubSeq. name (MatchSeq. name f*))))))</pre></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-parse.helpers" name="clj-parse.helpers"><h1 class="project-name">clj-parse.helpers</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(ns clj-parse.helpers
-  (:use [clj-parse.core]))</pre></tr><tr><td class="docs"><p>Match test functions</p>
-</td><td class="codes" /><pre class="brush: clojure">(defn mexcept [&amp; exclusions]
-  (let [exclset (set exclusions)]
-     (m1 (str &quot;anything except one of [&quot;
-           (interpose &quot;,&quot; exclusions) &quot;]&quot;)
-         #(not (exclset %)))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn default [value] (fn [&amp; res] (if (empty? res) value res)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def mdefault (make-match-transform-fn (fn [name t m] (mapply (str name &quot;*default&quot;) (default t) m))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def ignore (constantly nil))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def mignore (make-match1-fn (fn [name m] (mapply (str name &quot;*ignore&quot;) ignore m))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn group [&amp; matches] [matches])</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def mgroup (make-match1-fn (fn [name m] (mapply (str name &quot;*group&quot;) group m))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def mconstantly (make-match-transform-fn (fn [name t m] (mapply (str name &quot;*constantly&quot;) (constantly t) m))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn msubseq ([name sub-parser] (msub name (fn [x] (when (sequential? x) (sub-parser x)))))
-  ([sub-parser] (msubseq nil sub-parser)))</pre></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-parse.pseudoebnf" name="clj-parse.pseudoebnf"><h1 class="project-name">clj-parse.pseudoebnf</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(ns clj-parse.pseudoebnf
-  (:use [clj-parse.core])
-  (:use [clj-parse.helpers]))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(declare grammar)</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def GrammarExpr
-  (mapply mseq (m+ &quot;match expressions&quot;
-       (mapply
-        (fn [matcher name op transform]
-          (let [m* (op name matcher)] (if transform (mapply transform m*) m*))) 
-        (mseq &quot;match espression&quot;
-              (mor (msubseq &quot;nested sequence expression&quot; #(apply grammar %))
-                   (mexcept :? :+ :*))
-              (mdefault [nil] (m? &quot;matcher name&quot; string?))
-              (mdefault m1
-                        (m? (mor &quot;match operator&quot;
-                                 (mconstantly m* :*)
-                                 (mconstantly m+ :+)
-                                 (mconstantly m? :?))))
-              (mdefault [nil] (m? (mseq
-                                   &quot;match transform expression&quot; (mignore :=&gt;)
-                                   (m1 &quot;transform function&quot; ifn?)))))))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn grammar [&amp; forms] (first (GrammarExpr forms)))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(def GrammarOrExpr
-  (mapply
-   (fn [name matcher] (if name (assoc matcher :name name) matcher))
-   (mseq
-       (mdefault [nil] (m? string?))
-       (mapply mor (m+ (mor (msubseq &quot;grammar sequence&quot; grammar)
-                        (mapply m1 (m1 &quot;matcher expression&quot; ifn?))))))))</pre></tr><tr><td class="docs">
-</td><td class="codes" /><pre class="brush: clojure">(defn || [&amp; forms] (first (GrammarOrExpr forms)))</pre></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/fogus/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_clj-parse.core">clj-parse.core</li><li class="floating-toc-li" id="floating-toc_clj-parse.helpers">clj-parse.helpers</li><li class="floating-toc-li" id="floating-toc_clj-parse.pseudoebnf">clj-parse.pseudoebnf</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.3.0</td></tr></table></div><div class="dependencies"><h3>dev dependencies</h3><table><tr><td class="dep-name">lein-autodoc</td><td class="dotted"><hr /></td><td class="dep-version">0.9.0</td></tr><tr><td class="dep-name">lein-marginalia</td><td class="dotted"><hr /></td><td class="dep-version">0.7.0-SNAPSHOT</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#clj-parse.test.pseudoebnf">clj-parse.test.pseudoebnf</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#clj-parse.test.pseudoebnf" name="clj-parse.test.pseudoebnf"><h1 class="project-name">clj-parse.test.pseudoebnf</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(ns clj-parse.test.pseudoebnf
+  (:use [clj-parse.pseudoebnf])
+  (:use [clj-parse.helpers])
+  (:use [clojure.test]))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(def SimpleMatchExpr (grammar [(mexcept :+ :* :?) (|| :+ :* :?) :?] :+))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(defn test-match-expr [expr]
+  (is (= (SimpleMatchExpr expr) expr)))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(deftest test-expressions
+  (test-match-expr [keyword? :+])
+  (test-match-expr [string? keyword? :+ number? :*]))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(def crazy-grammar
+  (grammar [[(||  ['Say :=&gt; (constantly #(str % &quot;. &quot;))]
+                  ['Shout :=&gt; (constantly #(.toUpperCase (str % &quot;! &quot;)))]
+                  ['Whisper :=&gt; (constantly #(.toLowerCase (str % &quot;... &quot;)))])
+                 #(and (symbol? %) (not= '. %)) :+ :=&gt; #(apply str (interpose &quot; &quot; %&amp;))
+                 [number? 'times :=&gt; ignore] :? :=&gt; (default 1)
+                 '. :=&gt; ignore] :=&gt; group] :+))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(defmacro crazy-macro [&amp; words]
+  (let [sentences (crazy-grammar words)
+        actions (for [[f s n] sentences]
+                  `(for [i# (range ~n)] (~f ~s)))]
+    `(apply str (flatten [~@actions]))))</pre></tr><tr><td class="docs">
+</td><td class="codes" /><pre class="brush: clojure">(deftest test-crazy-macro
+  (is (= (crazy-macro Say Hello 3 times . Shout hello world 2 times . Whisper goodbye .)
+         &quot;Hello. Hello. Hello. HELLO WORLD! HELLO WORLD! goodbye... &quot;)))</pre></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/fogus/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a><div id="floating-toc"><ul><li class="floating-toc-li" id="floating-toc_clj-parse.test.pseudoebnf">clj-parse.test.pseudoebnf</li></ul></div></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
        SyntaxHighlighter.all()</script></body></html>
