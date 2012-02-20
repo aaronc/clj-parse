@@ -1,9 +1,12 @@
 (ns clj-parse.helpers
   (:use [clj-parse.core]))
 
-(def any? (constantly true))
-
-(defn eq [x] (fn [y] (= x y)))
+;; Match test functions
+(defn mexcept [& exclusions]
+  (let [exclset (set exclusions)]
+     (m1 (str "anything except one of ["
+           (interpose "," exclusions) "]")
+         #(not (exclset %)))))
 
 (defn default [value] (fn [& res] (if (empty? res) value res)))
 
@@ -18,3 +21,6 @@
 (def mgroup (make-match1-fn (fn [name m] (mapply (str name "*group") group m))))
 
 (def mconstantly (make-match-transform-fn (fn [name t m] (mapply (str name "*constantly") (constantly t) m))))
+
+(defn msubseq ([name sub-parser] (msub name (fn [x] (when (sequential? x) (sub-parser x)))))
+  ([sub-parser] (msubseq nil sub-parser)))

@@ -3,7 +3,7 @@
   (:use [clj-parse.helpers])
   (:use [clojure.test]))
 
-(def SimpleMatchExpr (>>> (>>> any? (|| (eq :+) (eq :*) (eq :?)) :?) :+))
+(def SimpleMatchExpr (grammar [(mexcept :+ :* :?) (|| :+ :* :?) :?] :+))
 
 (defn test-match-expr [expr]
   (is (= (SimpleMatchExpr expr) expr)))
@@ -13,12 +13,12 @@
   (test-match-expr [string? keyword? :+ number? :*]))
 
 (def crazy-grammar2
-  (>>> (>>> (>>> (||  [(eq 'Say) :=> (constantly #(str % ". "))]
-                      [(eq 'Shout) :=> (constantly #(.toUpperCase (str % "! ")))]
-                      [(eq 'Whisper) :=> (constantly #(.toLowerCase (str % "... ")))])
-                 #(and (symbol? %) (not (= '. %))) :+ :=> #(apply str (interpose " " %&))
-                 (>>> number? (eq 'times) :=> ignore) :? :=> (default 1)
-                 (eq '.) :=> ignore) :=> group) :+))
+  (grammar [[(||  ['Say :=> (constantly #(str % ". "))]
+                  ['Shout :=> (constantly #(.toUpperCase (str % "! ")))]
+                  ['Whisper :=> (constantly #(.toLowerCase (str % "... ")))])
+                 #(and (symbol? %) (not= '. %)) :+ :=> #(apply str (interpose " " %&))
+                 [number? 'times :=> ignore] :? :=> (default 1)
+                 '. :=> ignore] :=> group] :+))
 
 (defmacro crazy-macro2 [& words]
   (let [sentences (crazy-grammar2 words)

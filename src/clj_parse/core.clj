@@ -17,9 +17,9 @@
 ;; that take a single token and return a boolean result.  If an
 ;; array is passed to a match function #(apply mseq %) is called on
 ;; that array.  If a literal is passed to a match function, that
-;; literal is matched exactly.  Keywords are treated as literals.
-;; All match functions taken an optional name argument as their
-;; first argument to be used in debugging.
+;; literal is matched exactly.  Keywords and symbols are treated as
+;; literals.  All match functions taken an optional name argument as
+;; their first argument to be used in debugging.
 ;;
 ;; m1, m?, m*, m+ take one matcher argument.  mseq, mor, and msubseq take a
 ;; variable number of matcher arguments.
@@ -30,7 +30,7 @@
 (ns clj-parse.core)
 
 
-;; ## Definitions for debug logging
+;; ## Definitions for debug logging and error handling
 
 (def ^{:dynamic true :doc "Bound to the function used for debug logging or nil to disable logging"} **debug**  nil)
 
@@ -40,7 +40,8 @@
   (do (when **debug**
         (let [top (peek @log-stack)
               depth (count @log-stack)
-              pre (apply str (repeat (dec depth) "-"))]
+              pre (apply str (repeat (dec depth) "-"))
+              ctxt (if (nil? ctxt) "nil" ctxt)]
           (when (> depth 0) (**debug** (str pre top action ctxt)))))
       ctxt))
         
@@ -67,7 +68,7 @@
   [debug-redirect & body]
   `(binding [**debug** ~debug-redirect log-stack (atom (list))] ~@body))
 
-;; Definitions of the core parser functions and data structures
+;; ## Definitions of the core parser functions and data structures
 
 (defprotocol IMatcher
   "The core interface of the parsing framework.  All functions which do
@@ -87,11 +88,29 @@
   be returned to indicate that a match was successful but had no side
   effects."))
 
+;; These functions are used to interact with the parsing context
+(defn- cpeek [ctxt] (ffirst ctxt))
+
+(defn- cpop [[tokens res]] [(rest tokens) res])
+
+(defn- cpop-conj [[tokens res] x] [(rest tokens) (conj res x)])
+
+(defn- csetresult [[tokens res1] res2] [tokens res2])
+
+(defn- cresult [ctxt] (second ctxt))
+
+(defn- cdone? [ctxt] (empty? (first ctxt)))
+
+(defn- track-match-fail! [ctxt] nil)
+
+(defmacro wrap-track-fail [ctxt & body]
+  `(let [res# (do ~@body)] (if res# res# (track-match-fail! ~ctxt))))
+
 (defn parse "Given an IMatcher matcher and a sequence of tokens,
   parse the tokens and return the result sequence or nil if the
   matcher did not match all of the tokens."
-  [matcher tokens] (let [[coll res] (match matcher [tokens []])]
-                             (when (empty? coll) res)))
+  [matcher tokens] (let [ctxt (match matcher [tokens []])] 
+                             (when (cdone? ctxt) (cresult ctxt))))
 
 (defmacro defparsertype
   "Used for defining IMatcher instances, ensuring that their match
@@ -115,16 +134,14 @@
            clojure.lang.IFn
            (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))
 
-(defn- done? [ctxt] (empty? (ctxt 0)))
 
 ;; Calls test-fn on the first token in the token sequence.
 ;; If test-fn is not nil or false, takes the token from
 ;; the token sequence and places it in the output sequence.
-(defparsertype Match1 
-  [name test-fn] [this [coll res]] (when-let [x (first coll)]
-          (if (test-fn x)
-            [(rest coll) (conj res x)]
-            nil)))
+(defparsertype Match1 [name test-fn] [this ctxt]
+  (wrap-track-fail ctxt (when (not (cdone? ctxt))
+          (let [x (cpeek ctxt)]
+            (when (test-fn x) (cpop-conj ctxt x))))))
 
 (declare mseq)
 
@@ -136,21 +153,23 @@
   exactly once.  If name is nil, the matcher name is the literal
   itself - this is useful for debugging and errors messages."
   ([name literal] (m1 (if name name (str literal)) #(= literal %)))
-  ([literal] (mlit name literal)))
+  ([literal] (mlit nil literal)))
 
 (defn m1
   "Matches the given match-expr once and fails otherwise.
   match-expr can be an IMatcher instance, a test function
   taking one parameter and returning a true value if the match
   is successful, a sequence of arguments for mseq as described above,
-  or a literal value. Keywords even though they act as functions
-  are treated as literals."
+  or a literal value. Keywords and symbols even though they
+  implement IFn are treated as literals."
   ([name match-expr]
      (if (satisfies? IMatcher match-expr)
        (assoc-name name match-expr)
        (if (sequential? match-expr)
          (assoc-name name (apply mseq match-expr))
-         (if (and (ifn? match-expr) (not (keyword? match-expr)))
+         (if (and (ifn? match-expr)
+                  (not (keyword? match-expr))
+                  (not (symbol? match-expr)))
            (Match1. name match-expr)
            (mlit name match-expr)))))
   ([match-expr] (m1 nil match-expr)))
@@ -159,7 +178,7 @@
 
 (defn- do-match* [matcher ctxt]
     (loop [last-ctxt ctxt]
-    (if (done? last-ctxt)
+    (if (cdone? last-ctxt)
       last-ctxt
       (if-let [cur-ctxt (match matcher last-ctxt)]
                             (if (= cur-ctxt last-ctxt) last-ctxt (recur cur-ctxt))
@@ -174,8 +193,6 @@
 (defn make-match1-fn [func]
   (fn ([name f] (func name (m1 name f)))
      ([f] (func nil (m1 f)))))
-
-(def match1-arglists '([name matcher] [matcher]))
 
 (def ^{:doc "Matches the given matcher once or succeeds with no side effects." :arglists '([name matcher] [matcher])}
   m? (make-match1-fn (fn [name f] (Match?. name f))))
@@ -211,34 +228,22 @@
 first successful matcher." :arglists '([name & matchers] [& matchers])}
   mor (make-match*-fn (fn [name f*] (MatchOr. name f*))))
 
-(defn do-match-sub-seq [matcher ctxt]
- (let [[coll res] ctxt
-      x (first coll)
-      more (rest coll)]
-   (when (sequential? x)
-    (when-let [sub-ctxt (match matcher [x []])]
-      (when (done? sub-ctxt) [more (conj res (second sub-ctxt))])))))
-
-(defparsertype MatchSubSeq [name matcher] [this ctxt] (do-match-sub-seq matcher ctxt))
-
-(def ^{:doc "Creates a matcher which if it encounters a sequence as the first token,
-  will try to match the sequence of matchers against the tokens in the sub-sequence, failing
-  if the matchers do not parse the subsequence tokens completely, and
-  appending the array of results to the result sequence as an array." :arglists '([name & matchers] [& matchers])}
-  msubseq (make-match*-fn (fn [name f*] (MatchSubSeq. name (MatchSeq. name f*)))))
-
 (defparsertype MatchTransform [name transform matcher] [this ctxt]
   (when-let [new-ctxt (match matcher ctxt)]
-    (let [orig-res (second ctxt)
+    (let [orig-res (cresult ctxt)
           start (count orig-res)
-          new-res (second new-ctxt)
+          new-res (cresult new-ctxt)
           end (count new-res)
           to-transform (log-top " transforming "(subvec new-res start end))
           transformed (log-top " transformed to " (apply transform to-transform))]
-      [(first new-ctxt)
-       (if (not (nil? transformed))
-         (if (sequential? transformed) (into orig-res transformed) (conj orig-res transformed))
-         orig-res)])))
+          (csetresult new-ctxt
+                      (if (nil? transformed)
+                        orig-res
+                        (if (sequential? transformed)
+                          (into orig-res transformed) (conj orig-res transformed)))))))
+
+(defn- cput [[tokens res] x] [tokens
+ (if (sequential? x) (into res x) (conj res x))])
 
 (defn make-match-transform-fn [func]
   (fn ([name transform m] (func name transform (m1 m)))
@@ -253,6 +258,25 @@ first successful matcher." :arglists '([name & matchers] [& matchers])}
   function returns nil or an empty sequence, the match still succeeds, but nothing is appended to the
   result array (i.e. the result is ignored).  If the transform function returns a sequence,
   the items from the sequence are appended into the result array.  If the transform function returns
-  any other value, that value is appended to the result array.  (To append nil to the result array,
+  any other value, that value is conj'ed to the result array.  (To append nil to the result array,
   transform should return [nil]."}
   mapply (make-match-transform-fn (fn [name transform m] (MatchTransform. name transform m))))
+
+(defparsertype MatchSub [name sub-parser] [this ctxt]
+  (wrap-track-fail ctxt (when (not (cdone? ctxt))
+                         (let [res (sub-parser (cpeek ctxt))]
+                           (log-top " sub parser returned " res)
+                           (when (not (nil? res)) (cpop-conj ctxt res))))))
+
+(defn msub "Allows a sub-parser to parse a single expression and
+  substitute it into the result stream.  sub-parser should be a function
+  which takes one argument.  If it returns nil, the match fails.
+  Otherwise, its result is conj'ed onto the result sequence."
+  ([name sub-parser] (MatchSub. name sub-parser))
+  ([sub-parser] (msub nil sub-parser)))
+
+(comment (def ^{:doc "Creates a matcher which if it encounters a sequence as the first token,
+  will try to match the sequence of matchers against the tokens in the sub-sequence, failing
+  if the matchers do not parse the subsequence tokens completely, and
+  appending the array of results to the result sequence as an array." :arglists '([name & matchers] [& matchers])}
+    msubseq (make-match1-fn (fn [name f*] (MatchSubSeq. name (MatchSeq. name f*))))))

@@ -42,7 +42,6 @@
   (let [testm #(is (= ((mseq :a :b 3 number? 4) %) %))]
     (testm [:a :b 3 17 4])))
 
-
 (deftest test-match-apply-subseq-parse
   (let [p (partial parse (mseq (mor keyword? number?)
                                (mapply first (msubseq (mapply + (m* number?))))))]
@@ -50,13 +49,13 @@
 
 (def crazy-grammar (m+ (mgroup "Action"
                         (mseq (mor "Verb"
-                          (mapply (constantly #(str % ". ")) (eq 'Say))
-                          (mapply (constantly #(.toUpperCase (str % "! "))) (eq 'Shout))
-                          (mapply (constantly #(.toLowerCase (str % "... "))) (eq 'Whisper)))
+                          (mapply (constantly #(str % ". ")) 'Say)
+                          (mapply (constantly #(.toUpperCase (str % "! "))) 'Shout)
+                          (mapply (constantly #(.toLowerCase (str % "... "))) 'Whisper))
                           (mapply "Statement" #(apply str (interpose " " %&))
                                   (m+ "Words" #(and (symbol? %) (not (= '. %)))))
-                         (mdefault "Repetition" 1 (m? [number? (mignore (eq 'times))]))
-                         (mignore (eq '.))))))
+                         (mdefault "Repetition" 1 (m? [number? (mignore 'times)]))
+                         (mignore '.)))))
 
 (defmacro crazy-macro [& words]
   (let [sentences (crazy-grammar words)
