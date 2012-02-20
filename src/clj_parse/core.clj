@@ -267,7 +267,7 @@
            (mlit name match-expr)))))
   ([match-expr] (m1 nil match-expr)))
 
-(defparsertype Match? [name matcher] [this ctxt] (or (match matcher ctxt) ctxt))
+(defparsertype MatchQ [name matcher] [this ctxt] (or (match matcher ctxt) ctxt))
 
 (defn- do-match* [matcher ctxt]
     (loop [last-ctxt ctxt]
@@ -277,9 +277,9 @@
                             (if (= cur-ctxt last-ctxt) last-ctxt (recur cur-ctxt))
                             last-ctxt))))
 
-(defparsertype Match* [name matcher] [this ctxt] (do-match* matcher ctxt))
+(defparsertype MatchStar [name matcher] [this ctxt] (do-match* matcher ctxt))
 
-(defparsertype Match+ [name matcher] [this ctxt]
+(defparsertype MatchPlus [name matcher] [this ctxt]
   (let [new-ctxt (do-match* matcher ctxt)]
       (if (= ctxt new-ctxt) nil new-ctxt)))
 
@@ -288,11 +288,11 @@
      ([f] (func nil (m1 f)))))
 
 (def ^{:doc "Matches the given matcher once or succeeds with no side effects." :arglists '([name matcher] [matcher])}
-  m? (make-match1-fn (fn [name f] (Match?. name f))))
+  m? (make-match1-fn (fn [name f] (MatchQ. name f))))
 (def ^{:doc "Matches the given matcher any number of times or succeeds with no side effects." :arglists '([name matcher] [matcher])}
-  m* (make-match1-fn (fn [name f] (Match*. name f))))
+  m* (make-match1-fn (fn [name f] (MatchStar. name f))))
 (def ^{:doc "Matches the given matcher one or more times or fails." :arglists '([name matcher] [matcher])}
-  m+ (make-match1-fn (fn [name f] (Match+. name f))))
+  m+ (make-match1-fn (fn [name f] (MatchPlus. name f))))
 
 (defparsertype MatchSeq [name matchers] [this ctxt]
   (loop [m (first matchers)
