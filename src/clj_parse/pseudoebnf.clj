@@ -11,7 +11,7 @@
           (let [m* (op name matcher)] (if transform (mapply transform m*) m*))) 
         (mseq "match espression"
               (mor (msubseq "nested sequence expression" #(apply grammar %))
-                   (mexcept :? :+ :*))
+                   #(and (not (sequential? %)) (not (#{:* :+ :?} %))))
               (mdefault [nil] (m? "matcher name" string?))
               (mdefault m1
                         (m? (mor "match operator"
@@ -22,7 +22,7 @@
                                    "match transform expression" (mignore :=>)
                                    (m1 "transform function" ifn?)))))))))
 
-(defn grammar [& forms] (first (GrammarExpr forms)))
+(defn grammar [& forms] (first (parse-ex GrammarExpr forms)))
 
 (def GrammarOrExpr
   (mapply

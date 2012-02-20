@@ -9,9 +9,9 @@ even parsing test.
 The primarly design goal is to make it easy to generate correct
 parsers, but performance is not a primary consideration.
 Scenarios that do not depend on speed, such as generating macros,
-are good use cases.  The entire framework is expressed in about
-200 lines of code so that it can be easily embedded in projects
-that do not want an extra dependency.
+are good use cases.  The entire framework is expressed in a little
+more than 300 lines of code (excluding comments and docstrings)
+so that it can be easily embedded in projects that do not want an extra dependency.
 
 This library should be considered **alpha** quality as it has
 not been used in production.
@@ -68,7 +68,8 @@ user> (parser3 [:a 1 2 3 :b "H" "e" "ll" "o" :c 10 20 30])
 Please see the [generated documentation](http://aaronc.github.com/clj-parse/) for details on usage.
 You can see some interesting examples in the [tests](https://github.com/aaronc/clj-parse/blob/master/test/clj_parse/test/pseudoebnf.clj). A macro `dbg-parser` is available for debugging
 parsers and all matcher functions take an optional string as their first parameter which shows up in
-debugging output.
+debugging output.  There is a function `parse-ex` which will throw an exception explaining the reason that
+a parser failed and a function `parse-detailed` that provides detailed information on parsing errors.
 
 ## License
 

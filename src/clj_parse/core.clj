@@ -114,7 +114,6 @@
 
 (defn- track-match-fail! [ctxt]
   (when error-index
-    (when **debug** (**debug** "track-match-fail! " ctxt @parser-stack))
     (let [last-idx @error-index
           cur-idx (count (first ctxt))]
        (cond (< cur-idx last-idx)
