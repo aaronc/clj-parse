@@ -27,8 +27,7 @@
 ;; mapply takes one matcher argument and a transform function which
 ;; can transform the the output of its child matcher if that matcher
 ;; succeeds.
-(ns clj-parse.core
-  (:gen-class))
+(ns clj-parse.core)
 
 ;; ## Definitions for debug logging and error handling
 
@@ -50,7 +49,7 @@
               depth (count @parser-stack)
               pre (apply str (repeat (dec depth) "-"))
               ctxt (if (nil? ctxt) "nil" ctxt)
-              name (when top (str "<" (.getSimpleName (class top)) " "
+              name (when top (str "<" (.Name (class top)) " "
                                 (or (:name top) "Unknown") ">"))]
           (when (> depth 0)
             (**debug** (str pre name action ctxt)))))
@@ -184,23 +183,25 @@
        (when-let [ex (:nested-exception err-map)]
          (str "\nPossibly caused by caught exception: " ex))))))
 
-(gen-class :name clj-parse.ParserException :extends java.lang.Exception)
-
 (defn parse-ex
   "Same as parse function above, but throws an exception
   when the parser fails."
   [matcher tokens]
   (try (let [res (parse-detailed matcher tokens)]
          (if (map? res)
-           (throw (clj-parse.ParserException.
-                   (str (or (:name matcher) "Parser") " error. "
-                        (create-parser-error-msg res))
-                        (:nested-exception res)))
+           (throw (ex-info (str (or (:name matcher) "Parser") " error. "
+                                (create-parser-error-msg res))
+                           {:type ::parse-exception :data res}
+                           (:nested-exception res)))
            res))
-       (catch clj-parse.ParserException ex (throw ex))
-       (catch Throwable ex
-         (throw (clj-parse.ParserException. (str "Caught exception in "
-           (or (:name matcher) "parser") ": " (.toString ex)) ex)))))
+       (catch Object ex
+         (let [ex-map (ex-data ex)]
+           (if (= (:type (ex-data ex)) ::parse-exception)
+             (throw ex)
+             (throw (ex-info (str "Caught exception in "
+                                  (or (:name matcher) "parser") ": " (str ex))
+                             {:type ::parse-exception :data {:nested-exception ex}}
+                             ex)))))))
 
 (defmacro defparsertype
   "Used for defining IMatcher instances, ensuring that their match
@@ -216,7 +217,7 @@
                       (let [ret# (do ~@body)]
                         (when clj-parse.core/parser-stack (clj-parse.core/pop-log ret#))
                         ret#)
-                      (catch Throwable e#
+                      (catch Exception e#
                         (when clj-parse.core/parser-stack
                           (clj-parse.core/log-top " received exception:" "")
                           (when clj-parse.core/**debug** (clj-parse.core/**debug** e#))
@@ -225,7 +226,7 @@
                           (swap! clj-parse.core/nested-exception (constantly e#)))
                         nil)))
            clojure.lang.IFn
-           (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse this# forms#))))
+           (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse-ex this# forms#))))
 
 
 ;; Calls test-fn on the first token in the token sequence.
@@ -367,3 +368,14 @@ first successful matcher." :arglists '([name & matchers] [& matchers])}
   Otherwise, its result is conj'ed onto the result sequence."
   ([name sub-parser] (MatchSub. name sub-parser))
   ([sub-parser] (msub nil sub-parser)))
+
+(defparsertype Match1Extended [name match-fn] [this ctxt]
+  (wrap-track-fail ctxt (when (not (cdone? ctxt))
+          (let [x (cpeek ctxt)]
+            (when (match-fn x ctxt) (cpop-conj ctxt x))))))
+
+(defn m1extended
+  "Same as m1, but here match-fn takes two parameters:
+the token to be tested and the current parse context."
+  ([name match-fn] (Match1Extended. name match-fn))
+  ([match-fn] (m1extended nil match-fn)))

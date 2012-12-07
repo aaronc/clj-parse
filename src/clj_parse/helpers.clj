@@ -1,4 +1,5 @@
 (ns clj-parse.helpers
+  (:require [clojure.string :as str])
   (:use [clj-parse.core]))
 
 ;; Match test functions
@@ -29,3 +30,36 @@
   appending the array of results to the result sequence as an array."
   ([name sub-parser] (msub (or name "sub-sequence") (fn [x] (when (sequential? x) (sub-parser x)))))
   ([sub-parser] (msubseq nil sub-parser)))
+
+(defn mcharrange
+  "Matches a character within one of the specified ranges.
+Ex:
+  (mcharrange \\a \\z) matches a character between a-z
+  (mcharrange \\a \\z \\A \\Z) matches a character a-z or A-Z
+"
+  [& ranges]
+  (let [pairs (partition 2 ranges)]
+    (m1 (str "Character within: " (str/join "," (for [[low high] pairs] (str low "-" high))))
+        (fn check-char-range [x]
+          (and (char? x)
+               (loop [[low high] (first pairs)
+                      more (next pairs)]
+                 (if (and (<= low x) (<= x high))
+                   (if more (recur (first more) (next more))
+                       true)
+                   false)))))))
+
+(defn mcharstr
+  "Matches a literal character string.
+  Ex: (mcharstr \"abc\") matches \"abc\" within \"abcd\""
+  [char-str]
+  (mapply str (apply mseq char-str)))
+
+
+
+
+
+
+
+
+
