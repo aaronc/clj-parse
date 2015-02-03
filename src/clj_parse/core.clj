@@ -49,23 +49,34 @@
               depth (count @parser-stack)
               pre (apply str (repeat (dec depth) "-"))
               ctxt (if (nil? ctxt) "nil" ctxt)
-              name (when top (str "<" (.Name (class top)) " "
+              name (when top (str "<" (.getName (class top)) " "
                                 (or (:name top) "Unknown") ">"))]
           (when (> depth 0)
             (**debug** (str pre name action ctxt)))))
       ctxt))
+
+(defn- pr-short-list [coll]
+  (if (> (count coll) 3)
+    (conj (vec (take 3 coll)) "...")
+    coll))
+
+(defn- pr-ctxt [[remain parsed :as ctxt]]
+  (when ctxt
+    [(pr-short-list remain)
+     (pr-short-list parsed)]))
         
 (defn- push-log [this ctxt]
-  (do (log-top " passed " ctxt)
+  (do (log-top " passed " (pr-ctxt ctxt))
       (swap! parser-stack conj this)))
 
-(defn- pop-log [ret] (do (log-top " returned " ret) (swap! parser-stack pop)))
+(defn- pop-log [ret] (do (log-top " returned " (pr-ctxt ret)) (swap! parser-stack pop)))
 
 (defmacro dbg-parser
   "Convenience macro for debugging parsers.  Wrap the expressions
   you want to debug in the macro.  Ex: `(dbg-parser (my-parser tokens))`"
   [& body]
-  `(binding [**debug** println parser-stack (atom (list))] ~@body))
+  `(binding [clj-parse.core/**debug** println clj-parse.core/parser-stack (atom (list))]
+     ~@body))
 
 (defmacro dbg-parser* 
   "Same as `dbg-parser` excepts requires that you specify a `debug-redirect` function
@@ -166,7 +177,8 @@
            :expected-tokens (map #(infer-token-name (second %)) error-details)
            :nested-exception @nested-exception})
        (not (cdone? res-ctxt)) ; Parsing was successful, but not all of
-          {:unexpected-tokens (ctokens res-ctxt)} ; the tokens were parsed
+       {:unexpected-tokens (ctokens res-ctxt)
+        :parsed-tokens (cresult res-ctxt)} ; the tokens were parsed
        :success
           (cresult res-ctxt)))))
 
@@ -194,7 +206,7 @@
                            {:type ::parse-exception :data res}
                            (:nested-exception res)))
            res))
-       (catch Object ex
+       (catch Exception ex
          (let [ex-map (ex-data ex)]
            (if (= (:type (ex-data ex)) ::parse-exception)
              (throw ex)
@@ -224,7 +236,8 @@
                           (clj-parse.core/track-match-fail! ~ctxt))
                         (when clj-parse.core/nested-exception
                           (swap! clj-parse.core/nested-exception (constantly e#)))
-                        nil)))
+                        (println "got exception" e#)
+                        (throw e#))))
            clojure.lang.IFn
            (clojure.lang.IFn/invoke [this# forms#] (clj-parse.core/parse-ex this# forms#))))
 
@@ -316,10 +329,15 @@
           f* (map m1 (if name (rest forms) forms))]
       (func name f*))))
 
-(def ^{:doc "Creates a matcher which matchs the given matchers in order." :arglists '([name & matchers] [& matchers])}
+(def
+  ^{:doc "Creates a matcher which matchs the given matchers in order."
+    :arglists '([name & matchers] [& matchers])}
   mseq (make-match*-fn (fn [name f*] (MatchSeq. name f*))))
-(def ^{:doc "Creates a matcher which tries to match any one of the given matchers, returning the transformation of the
-first successful matcher." :arglists '([name & matchers] [& matchers])}
+
+(def
+  ^{:doc "Creates a matcher which tries to match any one of the given
+matchers, returning the transformation of the first successful matcher."
+    :arglists '([name & matchers] [& matchers])}
   mor (make-match*-fn (fn [name f*] (MatchOr. name f*))))
 
 (defparsertype MatchTransform [name transform matcher] [this ctxt]
@@ -379,3 +397,12 @@ first successful matcher." :arglists '([name & matchers] [& matchers])}
 the token to be tested and the current parse context."
   ([name match-fn] (Match1Extended. name match-fn))
   ([match-fn] (m1extended nil match-fn)))
+
+(defparsertype MatcherRef [name matcher-ref] [this ctxt]
+  (match @matcher-ref ctxt))
+
+(defn mref
+  "A reference matcher - useful when you need to reference a parser that has not
+  yet been defined. Ex: (mref #'my-declared-but-undefined-parser)."
+  ([name matcher-ref] (MatcherRef. name matcher-ref))
+  ([matcher-ref] (mref nil matcher-ref)))
